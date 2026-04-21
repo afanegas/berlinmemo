@@ -32,16 +32,32 @@
           <!-- Settings Dropdown Toggle -->
           <div class="settings-container" style="position: relative; margin-left: 12px;">
             <button id="btn-settings" title="Einstellungen" style="background: rgba(0,0,0,0.3); border: none; color: white; border-radius: 8px; width: 36px; height: 36px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">⚙️</button>
-            <div id="settings-menu" class="glass-panel hidden" style="position: absolute; top: 40px; right: 0; width: 220px; padding: 16px; border-radius: 12px; z-index: 2000;">
+            <div id="settings-menu" class="glass-panel hidden" style="position: absolute; top: 40px; right: 0; width: 280px; padding: 16px; border-radius: 12px; z-index: 2000; display: flex; flex-direction: column; gap: 12px;">
+              
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <label for="region-select" style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">Auswahl der Region:</label>
+                <select id="region-select" class="dropdown-select">
+                  <option value="alle">alle 97 Ortsteile</option>
+                  <option value="mitte_fk">8 Ortsteile - Mitte + Friedrichshain-Kreuzberg</option>
+                  <option value="reinickendorf">11 Ortsteile - Reinickendorf</option>
+                  <option value="pankow">13 Ortsteile - Pankow</option>
+                  <option value="spandau">9 Ortsteile - Spandau</option>
+                  <option value="charlottenburg_wilmersdorf">7 Ortsteile - Charlottenburg-Wilmersdorf</option>
+                  <option value="lichtenberg_marzahn">15 Ortsteile - Lichtenberg + Marzahn-Hellersdorf</option>
+                  <option value="steglitz_zehlendorf">8 Ortsteile - Steglitz-Zehlendorf</option>
+                  <option value="tempelhof_neukoelln">11 Ortsteile - Tempelhof-Schöneberg + Neukölln</option>
+                  <option value="treptow_koepenick">15 Ortsteile - Treptow-Köpenick</option>
+                  <option value="custom">Benutzerdefiniert</option>
+                </select>
+                <button id="btn-config-filter" class="action-btn hidden" style="padding: 6px; font-size: 0.8rem; margin-top: 4px;">Filter konfigurieren</button>
+              </div>
+
               <label style="display: flex; align-items: center; cursor: pointer; font-size: 0.9rem; color: var(--text-primary);">
-                <input type="checkbox" id="toggle-error-names" style="margin-right: 8px;">
+                <input type="checkbox" id="toggle-error-names" style="margin-right: 8px;" checked>
                 Namen bei Fehler zeigen
               </label>
             </div>
           </div>
-        </div>
-          <button id="btn-lernen" class="mode-btn active">Lernen</button>
-          <button id="btn-spielen" class="mode-btn">Spielen</button>
         </div>
 
         <div id="lernen-content">
@@ -77,6 +93,29 @@
             <div class="stat-box red"><span class="stat-value" id="stat-red">0</span><span class="stat-label">Fehler</span></div>
           </div>
           <button id="btn-restart" class="action-btn">Neu Spielen</button>
+        </div>
+      </div>
+
+      <!-- Custom Filter Modal -->
+      <div id="filter-modal" class="modal-overlay hidden">
+        <div class="modal-content glass-panel" style="max-width: 500px; padding: 20px;">
+          <h2 style="font-size: 1.5rem; margin-bottom: 16px;">Benutzerdefinierter Filter</h2>
+          
+          <div class="io-section" style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <input type="text" id="filter-export-input" readonly placeholder="Export String..." style="flex: 1; padding: 8px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 4px; font-family: monospace; font-size: 0.8rem;" />
+            <button id="btn-copy-filter" style="padding: 8px; cursor: pointer; background: #10b981; color: white; border: none; border-radius: 4px; font-weight: bold;">Kopieren</button>
+          </div>
+          
+          <div class="io-section" style="display: flex; gap: 8px; margin-bottom: 20px;">
+            <input type="text" id="filter-import-input" placeholder="Import String hier einfügen..." style="flex: 1; padding: 8px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 4px; font-family: monospace; font-size: 0.8rem;" />
+            <button id="btn-import-filter" style="padding: 8px; cursor: pointer; background: var(--accent-color); color: white; border: none; border-radius: 4px; font-weight: bold;">Importieren</button>
+          </div>
+
+          <div id="filter-checkboxes" style="max-height: 40vh; overflow-y: auto; text-align: left; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 24px; padding-right: 8px; font-size: 0.85rem;">
+            <!-- Dynamically populated JS checkboxes -->
+          </div>
+
+          <button id="btn-save-filter" class="action-btn">Speichern & Schließen</button>
         </div>
       </div>
     </main>

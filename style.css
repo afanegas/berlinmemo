@@ -285,3 +285,50 @@ body, html {
 .action-btn:hover {
   background: #4f46e5;
 }
+
+/* Remove white rectangle on click */
+.leaflet-interactive:focus {
+  outline: none;
+}
+path.leaflet-interactive:focus {
+  outline: none;
+}
+
+/* Error Tooltip CSS */
+.error-tooltip {
+  background: rgba(239, 68, 68, 0.95) !important;
+  border: 1px solid #dc2626 !important;
+  color: white !important;
+  font-weight: 800 !important;
+}
+
+.error-tooltip::before {
+  border-top-color: rgba(239, 68, 68, 0.95) !important;
+}
+.leaflet-tooltip-left.error-tooltip::before { border-left-color: rgba(239, 68, 68, 0.95) !important; }
+.leaflet-tooltip-right.error-tooltip::before { border-right-color: rgba(239, 68, 68, 0.95) !important; }
+.leaflet-tooltip-bottom.error-tooltip::before { border-bottom-color: rgba(239, 68, 68, 0.95) !important; }
+
+/* Inactive Region */
+.inactive-region {
+  pointer-events: none !important;
+}
+
+/* Settings Dropdown Style */
+.dropdown-select {
+  width: 100%;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  border-radius: 6px;
+  font-family: var(--primary-font);
+  font-size: 0.9rem;
+  outline: none;
+  cursor: pointer;
+}
+
+.dropdown-select option {
+  background: #121214;
+  color: var(--text-primary);
+}

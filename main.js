@@ -9,9 +9,22 @@ const bezirkColors = {
   "Tempelhof-Schöneberg": "#FF33CC",
   "Neukölln": "#33FFCC",
   "Treptow-Köpenick": "#FFCC33",
-  "Marzahn-Hellersdorf": "#66FF33",
+  "Marzahn-Hellersdorf": "#E024B1", // Pink/Magenta for high contrast
   "Lichtenberg": "#FF6633",
   "Reinickendorf": "#CC33FF"
+};
+
+const regionMap = {
+  "alle": "alle",
+  "mitte_fk": ["Mitte", "Friedrichshain-Kreuzberg"],
+  "reinickendorf": ["Reinickendorf"],
+  "pankow": ["Pankow"],
+  "spandau": ["Spandau"],
+  "charlottenburg_wilmersdorf": ["Charlottenburg-Wilmersdorf"],
+  "lichtenberg_marzahn": ["Lichtenberg", "Marzahn-Hellersdorf"],
+  "steglitz_zehlendorf": ["Steglitz-Zehlendorf"],
+  "tempelhof_neukoelln": ["Tempelhof-Schöneberg", "Neukölln"],
+  "treptow_koepenick": ["Treptow-Köpenick"]
 };
 
 // Fallback color logic if a new/unknown Bezirk appears
@@ -25,6 +38,7 @@ function getBezirkColor(bezirkName) {
 // State Management
 const appState = {
   mode: 'lernen', // 'lernen' | 'spielen'
+  customTargets: [],
   spielen: {
     allTargets: [],
     remainingTargets: [],
@@ -57,10 +71,80 @@ const dots = document.querySelectorAll('.dot');
 const statsModal = document.getElementById('stats-modal');
 const btnRestart = document.getElementById('btn-restart');
 
+const toggleErrorNames = document.getElementById('toggle-error-names');
+const regionSelect = document.getElementById('region-select');
+const btnConfigFilter = document.getElementById('btn-config-filter');
+
+const filterModal = document.getElementById('filter-modal');
+const btnSaveFilter = document.getElementById('btn-save-filter');
+const filterCheckboxesContainer = document.getElementById('filter-checkboxes');
+const filterExportInput = document.getElementById('filter-export-input');
+const btnCopyFilter = document.getElementById('btn-copy-filter');
+const filterImportInput = document.getElementById('filter-import-input');
+const btnImportFilter = document.getElementById('btn-import-filter');
+
+function updateExportString() {
+  filterExportInput.value = btoa(JSON.stringify(appState.customTargets));
+}
+
 // Mode Listeners
 btnLernen.addEventListener('click', () => switchMode('lernen'));
 btnSpielen.addEventListener('click', () => switchMode('spielen'));
 btnRestart.addEventListener('click', () => switchMode('spielen'));
+regionSelect.addEventListener('change', () => {
+  btnConfigFilter.classList.toggle('hidden', regionSelect.value !== 'custom');
+  switchMode(appState.mode);
+});
+
+document.getElementById('btn-settings').addEventListener('click', (e) => {
+  document.getElementById('settings-menu').classList.toggle('hidden');
+});
+
+// Close settings menu when clicking outside
+document.addEventListener('click', (e) => {
+  const settingsMenu = document.getElementById('settings-menu');
+  const btnSettings = document.getElementById('btn-settings');
+  if (!settingsMenu.classList.contains('hidden')) {
+    if (!settingsMenu.contains(e.target) && !btnSettings.contains(e.target)) {
+      settingsMenu.classList.add('hidden');
+    }
+  }
+});
+
+// Modal Logic
+btnConfigFilter.addEventListener('click', () => {
+  document.getElementById('settings-menu').classList.add('hidden');
+  filterModal.classList.remove('hidden');
+});
+
+btnSaveFilter.addEventListener('click', () => {
+  filterModal.classList.add('hidden');
+  switchMode(appState.mode); // re-init regions
+});
+
+btnCopyFilter.addEventListener('click', () => {
+  filterExportInput.select();
+  document.execCommand('copy');
+});
+
+btnImportFilter.addEventListener('click', () => {
+  try {
+    const val = filterImportInput.value.trim();
+    if (!val) return;
+    const parsed = JSON.parse(atob(val));
+    if (Array.isArray(parsed)) {
+      appState.customTargets = parsed;
+      Array.from(filterCheckboxesContainer.querySelectorAll('input[type="checkbox"]')).forEach(cb => {
+        cb.checked = parsed.includes(cb.value);
+      });
+      updateExportString();
+      filterImportInput.value = '';
+      alert('Erfolgreich importiert!');
+    }
+  } catch (e) {
+    alert('Ungültiger Import-String!');
+  }
+});
 
 function switchMode(mode) {
   appState.mode = mode;
@@ -85,21 +169,37 @@ let geojsonLayer;
 let highlightedFeature = null;
 
 // Base styles
+function isLayerInRegion(feature) {
+  const sel = regionSelect.value;
+  if (sel === 'alle') return true;
+  if (sel === 'custom') return appState.customTargets.includes(feature.properties.OTEIL);
+  return regionMap[sel].includes(feature.properties.BEZIRK);
+}
+
+function getInactiveStyle(feature) {
+  return { fillColor: getBezirkColor(feature.properties.BEZIRK), weight: 1, opacity: 0.4, color: 'rgba(255, 255, 255, 0.2)', fillOpacity: 0.15 };
+}
+
 function getLernenStyle(feature) {
+  if (!isLayerInRegion(feature)) return getInactiveStyle(feature);
   return { fillColor: getBezirkColor(feature.properties.BEZIRK), weight: 1, opacity: 1, color: 'rgba(255, 255, 255, 0.4)', fillOpacity: 0.35 };
 }
-function getSpielenBaseStyle() {
-  return { fillColor: '#333', weight: 1, opacity: 1, color: 'rgba(255, 255, 255, 0.4)', fillOpacity: 0.2 };
+function getSpielenBaseStyle(feature) {
+  return getLernenStyle(feature);
 }
 
 // Interaction Handlers
 function onEachFeature(feature, layer) {
-  layer.bindTooltip(feature.properties.OTEIL, { direction: 'center', className: 'custom-tooltip' });
+  if (isLayerInRegion(feature)) {
+    layer.bindTooltip(feature.properties.OTEIL, { direction: 'center', className: 'custom-tooltip' });
+  }
   
   layer.on({
     mouseover: (e) => {
+      const tgt = e.target;
+      if (!isLayerInRegion(tgt.feature)) return;
+      
       if (appState.mode === 'lernen') {
-        const tgt = e.target;
         if (highlightedFeature !== tgt) {
           tgt.setStyle({ weight: 3, color: '#fff', fillOpacity: 0.7 });
           if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) tgt.bringToFront();
@@ -112,8 +212,10 @@ function onEachFeature(feature, layer) {
       }
     },
     mouseout: (e) => {
+      const tgt = e.target;
+      if (!isLayerInRegion(tgt.feature)) return;
+      
       if (appState.mode === 'lernen') {
-        const tgt = e.target;
         if (highlightedFeature !== tgt) {
           geojsonLayer.resetStyle(tgt);
           if (highlightedFeature) {
@@ -134,6 +236,7 @@ function onEachFeature(feature, layer) {
       }
     },
     click: (e) => {
+      if (!isLayerInRegion(e.target.feature)) return;
       if (appState.mode === 'lernen') {
         if (highlightedFeature && highlightedFeature !== e.target) geojsonLayer.resetStyle(highlightedFeature);
         highlightedFeature = e.target;
@@ -151,7 +254,13 @@ function resetLernenMode() {
   if (!geojsonLayer) return;
   geojsonLayer.eachLayer(layer => {
     layer.setStyle(getLernenStyle(layer.feature));
-    if (!layer.getTooltip()) layer.bindTooltip(layer.feature.properties.OTEIL, { direction: 'center', className: 'custom-tooltip' });
+    if (!isLayerInRegion(layer.feature)) {
+      layer.unbindTooltip();
+      layer.getElement()?.classList.add('inactive-region');
+    } else {
+      layer.getElement()?.classList.remove('inactive-region');
+      if (!layer.getTooltip()) layer.bindTooltip(layer.feature.properties.OTEIL, { direction: 'center', className: 'custom-tooltip' });
+    }
     delete layer.feature.properties._gameState;
   });
   highlightedFeature = null;
@@ -167,10 +276,17 @@ function startSpielenMode() {
   if (!geojsonLayer) return;
   appState.spielen.allTargets = [];
   geojsonLayer.eachLayer(layer => {
-    appState.spielen.allTargets.push(layer);
     layer.unbindTooltip();
-    layer.setStyle(getSpielenBaseStyle());
     delete layer.feature.properties._gameState;
+    
+    if (!isLayerInRegion(layer.feature)) {
+      layer.setStyle(getInactiveStyle(layer.feature));
+      layer.getElement()?.classList.add('inactive-region');
+    } else {
+      appState.spielen.allTargets.push(layer);
+      layer.setStyle(getSpielenBaseStyle(layer.feature));
+      layer.getElement()?.classList.remove('inactive-region');
+    }
   });
   
   appState.spielen.remainingTargets = [...appState.spielen.allTargets].sort(() => Math.random() - 0.5);
@@ -218,9 +334,18 @@ function handleSpielenClick(clickedLayer) {
     setTimeout(pickNextTarget, 400);
   } else {
     clickedLayer.setStyle({ fillColor: '#ef4444', fillOpacity: 0.8 });
+    
+    const showNames = toggleErrorNames && toggleErrorNames.checked;
+    const errorDelay = showNames ? 1200 : 400; // give time to read if names are shown
+    
+    if (showNames) {
+      clickedLayer.bindTooltip(clickedLayer.feature.properties.OTEIL, { direction: 'center', className: 'custom-tooltip error-tooltip', permanent: true }).openTooltip();
+    }
+
     setTimeout(() => {
-      if (!clickedLayer.feature.properties._gameState) clickedLayer.setStyle(getSpielenBaseStyle());
-    }, 300);
+      if (!clickedLayer.feature.properties._gameState) clickedLayer.setStyle(getSpielenBaseStyle(clickedLayer.feature));
+      if (showNames) clickedLayer.unbindTooltip();
+    }, errorDelay); 
     
     if (appState.spielen.attempts <= 3) dots[3 - appState.spielen.attempts].classList.add('lost');
     
@@ -228,7 +353,7 @@ function handleSpielenClick(clickedLayer) {
       appState.spielen.stats.red++;
       targetLayer.setStyle({ fillColor: '#ef4444', fillOpacity: 0.8 });
       targetLayer.feature.properties._gameState = 'red';
-      setTimeout(pickNextTarget, 800);
+      setTimeout(pickNextTarget, errorDelay); 
     }
   }
 }
@@ -250,6 +375,36 @@ function endGame() {
 fetch('./lor_ortsteile.geojson')
   .then(resp => resp.json())
   .then(data => {
+    // Populate custom filter choices
+    const oteils = data.features.map(f => f.properties.OTEIL).sort();
+    appState.customTargets = []; // default blank
+    filterCheckboxesContainer.innerHTML = '';
+    
+    oteils.forEach(o => {
+      const lbl = document.createElement('label');
+      lbl.style.display = 'flex';
+      lbl.style.alignItems = 'center';
+      lbl.style.cursor = 'pointer';
+      
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = o;
+      cb.style.marginRight = '6px';
+      cb.addEventListener('change', () => {
+        if (cb.checked) {
+          if (!appState.customTargets.includes(o)) appState.customTargets.push(o);
+        } else {
+          appState.customTargets = appState.customTargets.filter(item => item !== o);
+        }
+        updateExportString();
+      });
+      
+      lbl.appendChild(cb);
+      lbl.appendChild(document.createTextNode(o));
+      filterCheckboxesContainer.appendChild(lbl);
+    });
+    updateExportString();
+
     geojsonLayer = L.geoJSON(data, { style: getLernenStyle, onEachFeature: onEachFeature }).addTo(map);
     map.fitBounds(geojsonLayer.getBounds());
   })
