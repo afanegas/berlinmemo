@@ -40,11 +40,13 @@ const appState = {
   mode: 'lernen', // 'lernen' | 'spielen'
   customTargets: [],
   spielen: {
+    inProgress: false,
     allTargets: [],
     remainingTargets: [],
     currentTarget: null,
     attempts: 0,
-    startTime: null,
+    lastStartTime: null,
+    elapsedBefore: 0,
     stats: { green: 0, orange: 0, red: 0 }
   }
 };
@@ -52,7 +54,12 @@ const appState = {
 // Initialize Map
 const map = L.map('map', { center: [52.5200, 13.4050], zoom: 11, zoomControl: false });
 L.control.zoom({ position: 'bottomright' }).addTo(map);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+
+// Create a custom pane so district borders stay on top of everything else
+map.createPane('bezirkePane');
+map.getPane('bezirkePane').style.zIndex = 650; // standard overlayPane is 400
+map.getPane('bezirkePane').style.pointerEvents = 'none'; // pass clicks through to ortsteile
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
   attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
   subdomains: 'abcd',
   maxZoom: 20
@@ -61,6 +68,7 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
 // DOM Elements
 const btnLernen = document.getElementById('btn-lernen');
 const btnSpielen = document.getElementById('btn-spielen');
+const btnRestartGame = document.getElementById('btn-restart-game');
 const lernenContent = document.getElementById('lernen-content');
 const spielenContent = document.getElementById('spielen-content');
 const bezirkTitleEl = document.getElementById('bezirk-title');
@@ -90,9 +98,19 @@ function updateExportString() {
 // Mode Listeners
 btnLernen.addEventListener('click', () => switchMode('lernen'));
 btnSpielen.addEventListener('click', () => switchMode('spielen'));
-btnRestart.addEventListener('click', () => switchMode('spielen'));
+btnRestart.addEventListener('click', () => {
+  appState.spielen.inProgress = false;
+  switchMode('spielen');
+});
+if (btnRestartGame) {
+  btnRestartGame.addEventListener('click', () => {
+    appState.spielen.inProgress = false;
+    startSpielenMode();
+  });
+}
 regionSelect.addEventListener('change', () => {
   btnConfigFilter.classList.toggle('hidden', regionSelect.value !== 'custom');
+  appState.spielen.inProgress = false;
   switchMode(appState.mode);
 });
 
@@ -119,6 +137,7 @@ btnConfigFilter.addEventListener('click', () => {
 
 btnSaveFilter.addEventListener('click', () => {
   filterModal.classList.add('hidden');
+  appState.spielen.inProgress = false;
   switchMode(appState.mode); // re-init regions
 });
 
@@ -147,6 +166,10 @@ btnImportFilter.addEventListener('click', () => {
 });
 
 function switchMode(mode) {
+  if (appState.mode === 'spielen' && mode !== 'spielen' && appState.spielen.inProgress) {
+    appState.spielen.elapsedBefore += (new Date() - appState.spielen.lastStartTime);
+  }
+  
   appState.mode = mode;
   if (mode === 'lernen') {
     btnLernen.classList.add('active');
@@ -154,6 +177,7 @@ function switchMode(mode) {
     lernenContent.classList.remove('hidden');
     spielenContent.classList.add('hidden');
     statsModal.classList.add('hidden');
+    if (btnRestartGame) btnRestartGame.style.display = 'none';
     resetLernenMode();
   } else {
     btnSpielen.classList.add('active');
@@ -161,7 +185,8 @@ function switchMode(mode) {
     spielenContent.classList.remove('hidden');
     lernenContent.classList.add('hidden');
     statsModal.classList.add('hidden');
-    startSpielenMode();
+    if (btnRestartGame) btnRestartGame.style.display = 'flex';
+    resumeSpielenMode();
   }
 }
 
@@ -177,12 +202,12 @@ function isLayerInRegion(feature) {
 }
 
 function getInactiveStyle(feature) {
-  return { fillColor: getBezirkColor(feature.properties.BEZIRK), weight: 1, opacity: 0.4, color: 'rgba(255, 255, 255, 0.2)', fillOpacity: 0.15 };
+  return { fillColor: '#94a3b8', weight: 1, opacity: 0.4, color: '#cbd5e1', fillOpacity: 0.2 };
 }
 
 function getLernenStyle(feature) {
   if (!isLayerInRegion(feature)) return getInactiveStyle(feature);
-  return { fillColor: getBezirkColor(feature.properties.BEZIRK), weight: 1, opacity: 1, color: 'rgba(255, 255, 255, 0.4)', fillOpacity: 0.35 };
+  return { fillColor: '#3b82f6', weight: 1, opacity: 0.8, color: '#1d4ed8', fillOpacity: 0.35 };
 }
 function getSpielenBaseStyle(feature) {
   return getLernenStyle(feature);
@@ -201,7 +226,7 @@ function onEachFeature(feature, layer) {
       
       if (appState.mode === 'lernen') {
         if (highlightedFeature !== tgt) {
-          tgt.setStyle({ weight: 3, color: '#fff', fillOpacity: 0.7 });
+          tgt.setStyle({ weight: 3, color: '#1e3a8a', fillOpacity: 0.7 });
           if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) tgt.bringToFront();
           bezirkTitleEl.textContent = tgt.feature.properties.BEZIRK;
           ortsteilNameEl.textContent = `Ortsteil: ${tgt.feature.properties.OTEIL}`;
@@ -240,9 +265,8 @@ function onEachFeature(feature, layer) {
       if (appState.mode === 'lernen') {
         if (highlightedFeature && highlightedFeature !== e.target) geojsonLayer.resetStyle(highlightedFeature);
         highlightedFeature = e.target;
-        e.target.setStyle({ weight: 3, color: '#fff', fillOpacity: 0.7 });
+        e.target.setStyle({ weight: 3, color: '#1e3a8a', fillOpacity: 0.7 });
         if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) e.target.bringToFront();
-        map.fitBounds(e.target.getBounds(), { padding: [50, 50], maxZoom: 13, animate: true, duration: 1 });
       } else if (appState.mode === 'spielen') {
         handleSpielenClick(e.target);
       }
@@ -261,7 +285,6 @@ function resetLernenMode() {
       layer.getElement()?.classList.remove('inactive-region');
       if (!layer.getTooltip()) layer.bindTooltip(layer.feature.properties.OTEIL, { direction: 'center', className: 'custom-tooltip' });
     }
-    delete layer.feature.properties._gameState;
   });
   highlightedFeature = null;
   bezirkTitleEl.textContent = "Berlin";
@@ -272,8 +295,57 @@ function resetLernenMode() {
   map.fitBounds(geojsonLayer.getBounds());
 }
 
+function resumeSpielenMode() {
+  if (!geojsonLayer) return;
+  if (!appState.spielen.inProgress) {
+    startSpielenMode();
+    return;
+  }
+  
+  appState.spielen.lastStartTime = new Date();
+  
+  geojsonLayer.eachLayer(layer => {
+    layer.unbindTooltip();
+    
+    if (!isLayerInRegion(layer.feature)) {
+      layer.setStyle(getInactiveStyle(layer.feature));
+      layer.getElement()?.classList.add('inactive-region');
+    } else {
+      layer.getElement()?.classList.remove('inactive-region');
+      const state = layer.feature.properties._gameState;
+      if (state === 'green') {
+        layer.setStyle({ fillColor: '#10b981', fillOpacity: 0.8 });
+      } else if (state === 'orange') {
+        layer.setStyle({ fillColor: '#f59e0b', fillOpacity: 0.8 });
+      } else if (state === 'red') {
+        layer.setStyle({ fillColor: '#ef4444', fillOpacity: 0.8 });
+      } else {
+        layer.setStyle(getSpielenBaseStyle(layer.feature));
+      }
+    }
+  });
+
+  if (appState.spielen.currentTarget) {
+    targetNameEl.textContent = appState.spielen.currentTarget.feature.properties.OTEIL;
+  }
+  
+  const total = appState.spielen.allTargets.length;
+  const current = total - appState.spielen.remainingTargets.length;
+  progressTextEl.textContent = `${current}/${total}`;
+
+  dots.forEach(d => d.classList.remove('lost'));
+  for (let i = 0; i < appState.spielen.attempts && i < 3; i++) {
+    dots[3 - (i + 1)].classList.add('lost');
+  }
+
+  map.fitBounds(geojsonLayer.getBounds());
+}
+
 function startSpielenMode() {
   if (!geojsonLayer) return;
+  appState.spielen.inProgress = true;
+  appState.spielen.elapsedBefore = 0;
+  appState.spielen.lastStartTime = new Date();
   appState.spielen.allTargets = [];
   geojsonLayer.eachLayer(layer => {
     layer.unbindTooltip();
@@ -291,7 +363,6 @@ function startSpielenMode() {
   
   appState.spielen.remainingTargets = [...appState.spielen.allTargets].sort(() => Math.random() - 0.5);
   appState.spielen.stats = { green: 0, orange: 0, red: 0 };
-  appState.spielen.startTime = new Date();
   
   map.fitBounds(geojsonLayer.getBounds());
   pickNextTarget();
@@ -359,7 +430,9 @@ function handleSpielenClick(clickedLayer) {
 }
 
 function endGame() {
-  const elapsed = Math.floor((new Date() - appState.spielen.startTime) / 1000);
+  appState.spielen.inProgress = false;
+  const elapsedMs = appState.spielen.elapsedBefore + (new Date() - appState.spielen.lastStartTime);
+  const elapsed = Math.floor(elapsedMs / 1000);
   const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
   const s = String(elapsed % 60).padStart(2, '0');
   
@@ -407,6 +480,23 @@ fetch('./lor_ortsteile.geojson')
 
     geojsonLayer = L.geoJSON(data, { style: getLernenStyle, onEachFeature: onEachFeature }).addTo(map);
     map.fitBounds(geojsonLayer.getBounds());
+    
+    // Load bezirksgrenzen with thicker borders
+    fetch('./bezirksgrenzen.geojson')
+      .then(resp => resp.json())
+      .then(bezirkData => {
+        L.geoJSON(bezirkData, {
+          pane: 'bezirkePane',
+          style: {
+            color: '#0f172a',
+            weight: 3,
+            opacity: 0.8,
+            fillOpacity: 0,
+            interactive: false
+          }
+        }).addTo(map);
+      })
+      .catch(err => console.error("Could not load bezirksgrenzen.geojson", err));
   })
   .catch(err => {
     console.error(err);
