@@ -59,6 +59,7 @@ L.control.zoom({ position: 'bottomright' }).addTo(map);
 map.createPane('bezirkePane');
 map.getPane('bezirkePane').style.zIndex = 650; // standard overlayPane is 400
 map.getPane('bezirkePane').style.pointerEvents = 'none'; // pass clicks through to ortsteile
+map.getPane('tooltipPane').style.zIndex = 700; // ensure tooltips are above district borders (650)
 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
   attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
   subdomains: 'abcd',
@@ -228,8 +229,8 @@ function onEachFeature(feature, layer) {
         if (highlightedFeature !== tgt) {
           tgt.setStyle({ weight: 3, color: '#1e3a8a', fillOpacity: 0.7 });
           if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) tgt.bringToFront();
-          bezirkTitleEl.textContent = tgt.feature.properties.BEZIRK;
-          ortsteilNameEl.textContent = `Ortsteil: ${tgt.feature.properties.OTEIL}`;
+          bezirkTitleEl.textContent = tgt.feature.properties.OTEIL;
+          ortsteilNameEl.textContent = `Bezirk: ${tgt.feature.properties.BEZIRK}`;
           bezirkTitleEl.style.background = `linear-gradient(135deg, #FFFFFF 0%, ${getBezirkColor(tgt.feature.properties.BEZIRK)} 100%)`;
           bezirkTitleEl.style.webkitBackgroundClip = 'text';
           bezirkTitleEl.style.webkitTextFillColor = 'transparent';
@@ -245,8 +246,8 @@ function onEachFeature(feature, layer) {
           geojsonLayer.resetStyle(tgt);
           if (highlightedFeature) {
             const props = highlightedFeature.feature.properties;
-            bezirkTitleEl.textContent = props.BEZIRK;
-            ortsteilNameEl.textContent = `Ortsteil: ${props.OTEIL}`;
+            bezirkTitleEl.textContent = props.OTEIL;
+            ortsteilNameEl.textContent = `Bezirk: ${props.BEZIRK}`;
             bezirkTitleEl.style.background = `linear-gradient(135deg, #FFFFFF 0%, ${getBezirkColor(props.BEZIRK)} 100%)`;
             bezirkTitleEl.style.webkitBackgroundClip = 'text';
             bezirkTitleEl.style.webkitTextFillColor = 'transparent';
