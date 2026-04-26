@@ -70,6 +70,7 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png
 const btnLernen = document.getElementById('btn-lernen');
 const btnSpielen = document.getElementById('btn-spielen');
 const btnRestartGame = document.getElementById('btn-restart-game');
+const btnSkipTarget = document.getElementById('btn-skip-target');
 const lernenContent = document.getElementById('lernen-content');
 const spielenContent = document.getElementById('spielen-content');
 const bezirkTitleEl = document.getElementById('bezirk-title');
@@ -107,6 +108,11 @@ if (btnRestartGame) {
   btnRestartGame.addEventListener('click', () => {
     appState.spielen.inProgress = false;
     startSpielenMode();
+  });
+}
+if (btnSkipTarget) {
+  btnSkipTarget.addEventListener('click', () => {
+    skipTarget();
   });
 }
 regionSelect.addEventListener('change', () => {
@@ -179,6 +185,7 @@ function switchMode(mode) {
     spielenContent.classList.add('hidden');
     statsModal.classList.add('hidden');
     if (btnRestartGame) btnRestartGame.style.display = 'none';
+    if (btnSkipTarget) btnSkipTarget.style.display = 'none';
     resetLernenMode();
   } else {
     btnSpielen.classList.add('active');
@@ -187,6 +194,7 @@ function switchMode(mode) {
     lernenContent.classList.add('hidden');
     statsModal.classList.add('hidden');
     if (btnRestartGame) btnRestartGame.style.display = 'flex';
+    if (btnSkipTarget) btnSkipTarget.style.display = 'flex';
     resumeSpielenMode();
   }
 }
@@ -425,9 +433,44 @@ function handleSpielenClick(clickedLayer) {
       appState.spielen.stats.red++;
       targetLayer.setStyle({ fillColor: '#ef4444', fillOpacity: 0.8 });
       targetLayer.feature.properties._gameState = 'red';
-      setTimeout(pickNextTarget, errorDelay); 
+      
+      // Always show tooltip on failure
+      targetLayer.bindTooltip(targetLayer.feature.properties.OTEIL, { 
+        direction: 'center', 
+        className: 'custom-tooltip error-tooltip', 
+        permanent: true 
+      }).openTooltip();
+
+      appState.spielen.currentTarget = null; // Disable interaction during delay
+
+      setTimeout(() => {
+        targetLayer.unbindTooltip();
+        pickNextTarget();
+      }, 1200); 
     }
   }
+}
+
+function skipTarget() {
+  const targetLayer = appState.spielen.currentTarget;
+  if (!targetLayer || !appState.spielen.inProgress) return;
+
+  appState.spielen.stats.red++;
+  targetLayer.setStyle({ fillColor: '#ef4444', fillOpacity: 0.8 });
+  targetLayer.feature.properties._gameState = 'red';
+  
+  targetLayer.bindTooltip(targetLayer.feature.properties.OTEIL, { 
+    direction: 'center', 
+    className: 'custom-tooltip error-tooltip', 
+    permanent: true 
+  }).openTooltip();
+
+  appState.spielen.currentTarget = null; // Disable interaction during delay
+
+  setTimeout(() => {
+    targetLayer.unbindTooltip();
+    pickNextTarget();
+  }, 1200);
 }
 
 function endGame() {
