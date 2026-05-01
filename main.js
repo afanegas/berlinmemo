@@ -16,27 +16,33 @@ const bezirkColors = {
 
 const regionMap = {
   "alle": "alle",
-  "mitte_fk": ["Mitte", "Friedrichshain-Kreuzberg"],
-  "reinickendorf": ["Reinickendorf"],
+  "mitte": ["Mitte"],
+  "friedrichshain_kreuzberg": ["Friedrichshain-Kreuzberg"],
   "pankow": ["Pankow"],
-  "spandau": ["Spandau"],
   "charlottenburg_wilmersdorf": ["Charlottenburg-Wilmersdorf"],
-  "lichtenberg_marzahn": ["Lichtenberg", "Marzahn-Hellersdorf"],
+  "spandau": ["Spandau"],
   "steglitz_zehlendorf": ["Steglitz-Zehlendorf"],
-  "tempelhof_neukoelln": ["Tempelhof-Schöneberg", "Neukölln"],
-  "treptow_koepenick": ["Treptow-Köpenick"]
+  "tempelhof_schoeneberg": ["Tempelhof-Schöneberg"],
+  "neukoelln": ["Neukölln"],
+  "treptow_koepenick": ["Treptow-Köpenick"],
+  "marzahn_hellersdorf": ["Marzahn-Hellersdorf"],
+  "lichtenberg": ["Lichtenberg"],
+  "reinickendorf": ["Reinickendorf"]
 };
 
 const regionDisplayNames = {
-  "mitte_fk": "Mitte + Friedrichshain-Kreuzberg",
-  "reinickendorf": "Reinickendorf",
+  "mitte": "Mitte",
+  "friedrichshain_kreuzberg": "Friedrichshain-Kreuzberg",
   "pankow": "Pankow",
-  "spandau": "Spandau",
   "charlottenburg_wilmersdorf": "Charlottenburg-Wilmersdorf",
-  "lichtenberg_marzahn": "Lichtenberg + Marzahn-Hellersdorf",
+  "spandau": "Spandau",
   "steglitz_zehlendorf": "Steglitz-Zehlendorf",
-  "tempelhof_neukoelln": "Tempelhof-Schöneberg + Neukölln",
-  "treptow_koepenick": "Treptow-Köpenick"
+  "tempelhof_schoeneberg": "Tempelhof-Schöneberg",
+  "neukoelln": "Neukölln",
+  "treptow_koepenick": "Treptow-Köpenick",
+  "marzahn_hellersdorf": "Marzahn-Hellersdorf",
+  "lichtenberg": "Lichtenberg",
+  "reinickendorf": "Reinickendorf"
 };
 
 // Fallback color logic if a new/unknown Bezirk appears
