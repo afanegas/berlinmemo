@@ -248,19 +248,26 @@ function switchMode(mode) {
 
 let ortsteilData = null;
 let quartierData = null;
+let plrData = null;
 let geojsonLayer;
 let highlightedFeature = null;
 
 function getActiveData() {
-  return appState.gameType === 'ortsteile' ? ortsteilData : quartierData;
+  if (appState.gameType === 'ortsteile') return ortsteilData;
+  if (appState.gameType === 'quartier') return quartierData;
+  return plrData;
 }
 
 function getTypeName() {
-  return appState.gameType === 'ortsteile' ? 'Ortsteile' : 'Quartiere';
+  if (appState.gameType === 'ortsteile') return 'Ortsteile';
+  if (appState.gameType === 'quartier') return 'Quartiere';
+  return 'PLR';
 }
 
 function getDefaultPrompt() {
-  return appState.gameType === 'ortsteile' ? 'Wähle einen Ortsteil' : 'Wähle ein Quartier';
+  if (appState.gameType === 'ortsteile') return 'Wähle einen Ortsteil';
+  if (appState.gameType === 'quartier') return 'Wähle ein Quartier';
+  return 'Wähle einen Planungsraum';
 }
 
 function updateRegionSelectLabels() {
@@ -618,10 +625,23 @@ function endGame() {
 Promise.all([
   fetch('./lor_ortsteile.geojson').then(r => r.json()),
   fetch('./quartier_berlin.geojson').then(r => r.json()),
+  fetch('./lor_2021_a_lor_plr_2021_WGS84.geojson').then(r => r.json()),
   fetch('./bezirksgrenzen.geojson').then(r => r.json())
-]).then(([oData, qData, bezirkData]) => {
+]).then(([oData, qData, pData, bezirkData]) => {
   ortsteilData = oData;
   quartierData = qData;
+  
+  // Normalize PLR data to match OTEIL/BEZIRK schema
+  pData.features.forEach(f => {
+    f.properties.OTEIL = f.properties.plr_name;
+    // Strip "01 - " prefix from "01 - Mitte"
+    if (f.properties.bez && f.properties.bez.includes(' - ')) {
+      f.properties.BEZIRK = f.properties.bez.split(' - ')[1];
+    } else {
+      f.properties.BEZIRK = f.properties.bez;
+    }
+  });
+  plrData = pData;
 
   // Build initial layer and UI
   rebuildCustomFilter();
