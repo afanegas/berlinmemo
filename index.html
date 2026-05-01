@@ -41,6 +41,14 @@
             <div id="settings-menu" class="glass-panel hidden" style="padding: 16px; border-radius: 12px; display: flex; flex-direction: column; gap: 12px;">
               
               <div style="display: flex; flex-direction: column; gap: 4px;">
+                <label for="gametype-select" style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">Spielmodus:</label>
+                <select id="gametype-select" class="dropdown-select">
+                  <option value="ortsteile">Ortsteile</option>
+                  <option value="quartier">Quartiere</option>
+                </select>
+              </div>
+
+              <div style="display: flex; flex-direction: column; gap: 4px;">
                 <label for="region-select" style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">Auswahl der Region:</label>
                 <select id="region-select" class="dropdown-select">
                   <option value="alle">alle 97 Ortsteile</option>
@@ -61,6 +69,11 @@
               <label style="display: flex; align-items: center; cursor: pointer; font-size: 0.9rem; color: var(--text-primary);">
                 <input type="checkbox" id="toggle-error-names" style="margin-right: 8px;" checked>
                 Namen bei Fehler zeigen
+              </label>
+
+              <label style="display: flex; align-items: center; cursor: pointer; font-size: 0.9rem; color: var(--text-primary);">
+                <input type="checkbox" id="toggle-map-labels" style="margin-right: 8px;">
+                Kartennamen anzeigen
               </label>
             </div>
           </div>

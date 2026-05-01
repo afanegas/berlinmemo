@@ -27,6 +27,18 @@ const regionMap = {
   "treptow_koepenick": ["Treptow-Köpenick"]
 };
 
+const regionDisplayNames = {
+  "mitte_fk": "Mitte + Friedrichshain-Kreuzberg",
+  "reinickendorf": "Reinickendorf",
+  "pankow": "Pankow",
+  "spandau": "Spandau",
+  "charlottenburg_wilmersdorf": "Charlottenburg-Wilmersdorf",
+  "lichtenberg_marzahn": "Lichtenberg + Marzahn-Hellersdorf",
+  "steglitz_zehlendorf": "Steglitz-Zehlendorf",
+  "tempelhof_neukoelln": "Tempelhof-Schöneberg + Neukölln",
+  "treptow_koepenick": "Treptow-Köpenick"
+};
+
 // Fallback color logic if a new/unknown Bezirk appears
 function getBezirkColor(bezirkName) {
   if (bezirkColors[bezirkName]) return bezirkColors[bezirkName];
@@ -38,6 +50,7 @@ function getBezirkColor(bezirkName) {
 // State Management
 const appState = {
   mode: 'lernen', // 'lernen' | 'spielen'
+  gameType: 'ortsteile', // 'ortsteile' | 'quartier'
   customTargets: [],
   spielen: {
     inProgress: false,
@@ -59,12 +72,25 @@ L.control.zoom({ position: 'bottomright' }).addTo(map);
 map.createPane('bezirkePane');
 map.getPane('bezirkePane').style.zIndex = 650; // standard overlayPane is 400
 map.getPane('bezirkePane').style.pointerEvents = 'none'; // pass clicks through to ortsteile
+
+// Create a labels pane to stay above features but below borders/tooltips
+map.createPane('labelsPane');
+map.getPane('labelsPane').style.zIndex = 600;
+map.getPane('labelsPane').style.pointerEvents = 'none';
+
 map.getPane('tooltipPane').style.zIndex = 700; // ensure tooltips are above district borders (650)
 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
   attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
   subdomains: 'abcd',
   maxZoom: 20
 }).addTo(map);
+
+const labelsLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+  subdomains: 'abcd',
+  maxZoom: 20,
+  pane: 'labelsPane'
+});
 
 // DOM Elements
 const btnLernen = document.getElementById('btn-lernen');
@@ -82,7 +108,9 @@ const statsModal = document.getElementById('stats-modal');
 const btnRestart = document.getElementById('btn-restart');
 
 const toggleErrorNames = document.getElementById('toggle-error-names');
+const toggleMapLabels = document.getElementById('toggle-map-labels');
 const regionSelect = document.getElementById('region-select');
+const gametypeSelect = document.getElementById('gametype-select');
 const btnConfigFilter = document.getElementById('btn-config-filter');
 
 const filterModal = document.getElementById('filter-modal');
@@ -121,9 +149,28 @@ regionSelect.addEventListener('change', () => {
   switchMode(appState.mode);
 });
 
+gametypeSelect.addEventListener('change', () => {
+  appState.gameType = gametypeSelect.value;
+  appState.spielen.inProgress = false;
+  buildActiveLayer();
+  updateRegionSelectLabels();
+  rebuildCustomFilter();
+  switchMode(appState.mode);
+});
+
 document.getElementById('btn-settings').addEventListener('click', (e) => {
   document.getElementById('settings-menu').classList.toggle('hidden');
 });
+
+if (toggleMapLabels) {
+  toggleMapLabels.addEventListener('change', () => {
+    if (toggleMapLabels.checked) {
+      labelsLayer.addTo(map);
+    } else {
+      map.removeLayer(labelsLayer);
+    }
+  });
+}
 
 // Close settings menu when clicking outside
 document.addEventListener('click', (e) => {
@@ -176,7 +223,7 @@ function switchMode(mode) {
   if (appState.mode === 'spielen' && mode !== 'spielen' && appState.spielen.inProgress) {
     appState.spielen.elapsedBefore += (new Date() - appState.spielen.lastStartTime);
   }
-  
+
   appState.mode = mode;
   if (mode === 'lernen') {
     btnLernen.classList.add('active');
@@ -199,8 +246,87 @@ function switchMode(mode) {
   }
 }
 
+let ortsteilData = null;
+let quartierData = null;
 let geojsonLayer;
 let highlightedFeature = null;
+
+function getActiveData() {
+  return appState.gameType === 'ortsteile' ? ortsteilData : quartierData;
+}
+
+function getTypeName() {
+  return appState.gameType === 'ortsteile' ? 'Ortsteile' : 'Quartiere';
+}
+
+function getDefaultPrompt() {
+  return appState.gameType === 'ortsteile' ? 'Wähle einen Ortsteil' : 'Wähle ein Quartier';
+}
+
+function updateRegionSelectLabels() {
+  const data = getActiveData();
+  if (!data) return;
+  const typeName = getTypeName();
+  Array.from(regionSelect.options).forEach(opt => {
+    if (opt.value === 'alle') {
+      opt.textContent = `alle ${data.features.length} ${typeName}`;
+    } else if (opt.value === 'custom') {
+      opt.textContent = 'Benutzerdefiniert';
+    } else if (regionMap[opt.value]) {
+      const bezirke = regionMap[opt.value];
+      const count = data.features.filter(f => bezirke.includes(f.properties.BEZIRK)).length;
+      opt.textContent = `${count} ${typeName} - ${regionDisplayNames[opt.value]}`;
+    }
+  });
+}
+
+function rebuildCustomFilter() {
+  const data = getActiveData();
+  if (!data) return;
+  const oteils = data.features.map(f => f.properties.OTEIL).sort();
+  appState.customTargets = [];
+  filterCheckboxesContainer.innerHTML = '';
+  oteils.forEach(o => {
+    const lbl = document.createElement('label');
+    lbl.style.display = 'flex';
+    lbl.style.alignItems = 'center';
+    lbl.style.cursor = 'pointer';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = o;
+    cb.style.marginRight = '6px';
+    cb.addEventListener('change', () => {
+      if (cb.checked) {
+        if (!appState.customTargets.includes(o)) appState.customTargets.push(o);
+      } else {
+        appState.customTargets = appState.customTargets.filter(item => item !== o);
+      }
+      updateExportString();
+    });
+    lbl.appendChild(cb);
+    lbl.appendChild(document.createTextNode(o));
+    filterCheckboxesContainer.appendChild(lbl);
+  });
+  updateExportString();
+}
+
+function buildActiveLayer() {
+  if (geojsonLayer) {
+    map.removeLayer(geojsonLayer);
+    geojsonLayer = null;
+  }
+  const data = getActiveData();
+  if (!data) return;
+  const opts = { style: getLernenStyle, onEachFeature: onEachFeature };
+  if (appState.gameType === 'quartier') {
+    opts.pointToLayer = (feature, latlng) => {
+      return L.circleMarker(latlng, { radius: 12 });
+    };
+  }
+  geojsonLayer = L.geoJSON(data, opts).addTo(map);
+  highlightedFeature = null;
+  map.fitBounds(geojsonLayer.getBounds());
+}
 
 // Base styles
 function isLayerInRegion(feature) {
@@ -227,12 +353,12 @@ function onEachFeature(feature, layer) {
   if (isLayerInRegion(feature)) {
     layer.bindTooltip(feature.properties.OTEIL, { direction: 'center', className: 'custom-tooltip' });
   }
-  
+
   layer.on({
     mouseover: (e) => {
       const tgt = e.target;
       if (!isLayerInRegion(tgt.feature)) return;
-      
+
       if (appState.mode === 'lernen') {
         if (highlightedFeature !== tgt) {
           tgt.setStyle({ weight: 3, color: '#1e3a8a', fillOpacity: 0.7 });
@@ -248,7 +374,7 @@ function onEachFeature(feature, layer) {
     mouseout: (e) => {
       const tgt = e.target;
       if (!isLayerInRegion(tgt.feature)) return;
-      
+
       if (appState.mode === 'lernen') {
         if (highlightedFeature !== tgt) {
           geojsonLayer.resetStyle(tgt);
@@ -261,7 +387,7 @@ function onEachFeature(feature, layer) {
             bezirkTitleEl.style.webkitTextFillColor = 'transparent';
           } else {
             bezirkTitleEl.textContent = "Berlin";
-            ortsteilNameEl.textContent = "Wähle einen Ortsteil";
+            ortsteilNameEl.textContent = getDefaultPrompt();
             bezirkTitleEl.style.background = `linear-gradient(135deg, #FFFFFF 0%, #A5B4FC 100%)`;
             bezirkTitleEl.style.webkitBackgroundClip = 'text';
             bezirkTitleEl.style.webkitTextFillColor = 'transparent';
@@ -297,7 +423,7 @@ function resetLernenMode() {
   });
   highlightedFeature = null;
   bezirkTitleEl.textContent = "Berlin";
-  ortsteilNameEl.textContent = "Wähle einen Ortsteil";
+  ortsteilNameEl.textContent = getDefaultPrompt();
   bezirkTitleEl.style.background = `linear-gradient(135deg, #FFFFFF 0%, #A5B4FC 100%)`;
   bezirkTitleEl.style.webkitBackgroundClip = 'text';
   bezirkTitleEl.style.webkitTextFillColor = 'transparent';
@@ -310,12 +436,12 @@ function resumeSpielenMode() {
     startSpielenMode();
     return;
   }
-  
+
   appState.spielen.lastStartTime = new Date();
-  
+
   geojsonLayer.eachLayer(layer => {
     layer.unbindTooltip();
-    
+
     if (!isLayerInRegion(layer.feature)) {
       layer.setStyle(getInactiveStyle(layer.feature));
       layer.getElement()?.classList.add('inactive-region');
@@ -337,7 +463,7 @@ function resumeSpielenMode() {
   if (appState.spielen.currentTarget) {
     targetNameEl.textContent = appState.spielen.currentTarget.feature.properties.OTEIL;
   }
-  
+
   const total = appState.spielen.allTargets.length;
   const current = total - appState.spielen.remainingTargets.length;
   progressTextEl.textContent = `${current}/${total}`;
@@ -359,7 +485,7 @@ function startSpielenMode() {
   geojsonLayer.eachLayer(layer => {
     layer.unbindTooltip();
     delete layer.feature.properties._gameState;
-    
+
     if (!isLayerInRegion(layer.feature)) {
       layer.setStyle(getInactiveStyle(layer.feature));
       layer.getElement()?.classList.add('inactive-region');
@@ -369,10 +495,10 @@ function startSpielenMode() {
       layer.getElement()?.classList.remove('inactive-region');
     }
   });
-  
+
   appState.spielen.remainingTargets = [...appState.spielen.allTargets].sort(() => Math.random() - 0.5);
   appState.spielen.stats = { green: 0, orange: 0, red: 0 };
-  
+
   map.fitBounds(geojsonLayer.getBounds());
   pickNextTarget();
 }
@@ -384,13 +510,13 @@ function pickNextTarget() {
   }
   appState.spielen.currentTarget = appState.spielen.remainingTargets.pop();
   appState.spielen.attempts = 0;
-  
+
   targetNameEl.textContent = appState.spielen.currentTarget.feature.properties.OTEIL;
-  
+
   const total = appState.spielen.allTargets.length;
   const current = total - appState.spielen.remainingTargets.length;
   progressTextEl.textContent = `${current}/${total}`;
-  
+
   dots.forEach(d => d.classList.remove('lost'));
 }
 
@@ -399,7 +525,7 @@ function handleSpielenClick(clickedLayer) {
   if (!targetLayer || clickedLayer.feature.properties._gameState) return;
 
   appState.spielen.attempts++;
-  
+
   if (clickedLayer === targetLayer) {
     dots.forEach(d => d.classList.remove('lost'));
     if (appState.spielen.attempts === 1) {
@@ -414,10 +540,10 @@ function handleSpielenClick(clickedLayer) {
     setTimeout(pickNextTarget, 400);
   } else {
     clickedLayer.setStyle({ fillColor: '#ef4444', fillOpacity: 0.8 });
-    
+
     const showNames = toggleErrorNames && toggleErrorNames.checked;
     const errorDelay = showNames ? 1200 : 400; // give time to read if names are shown
-    
+
     if (showNames) {
       clickedLayer.bindTooltip(clickedLayer.feature.properties.OTEIL, { direction: 'center', className: 'custom-tooltip error-tooltip', permanent: true }).openTooltip();
     }
@@ -425,20 +551,20 @@ function handleSpielenClick(clickedLayer) {
     setTimeout(() => {
       if (!clickedLayer.feature.properties._gameState) clickedLayer.setStyle(getSpielenBaseStyle(clickedLayer.feature));
       if (showNames) clickedLayer.unbindTooltip();
-    }, errorDelay); 
-    
+    }, errorDelay);
+
     if (appState.spielen.attempts <= 3) dots[3 - appState.spielen.attempts].classList.add('lost');
-    
+
     if (appState.spielen.attempts >= 3) {
       appState.spielen.stats.red++;
       targetLayer.setStyle({ fillColor: '#ef4444', fillOpacity: 0.8 });
       targetLayer.feature.properties._gameState = 'red';
-      
+
       // Always show tooltip on failure
-      targetLayer.bindTooltip(targetLayer.feature.properties.OTEIL, { 
-        direction: 'center', 
-        className: 'custom-tooltip error-tooltip', 
-        permanent: true 
+      targetLayer.bindTooltip(targetLayer.feature.properties.OTEIL, {
+        direction: 'center',
+        className: 'custom-tooltip error-tooltip',
+        permanent: true
       }).openTooltip();
 
       appState.spielen.currentTarget = null; // Disable interaction during delay
@@ -446,7 +572,7 @@ function handleSpielenClick(clickedLayer) {
       setTimeout(() => {
         targetLayer.unbindTooltip();
         pickNextTarget();
-      }, 1200); 
+      }, 1200);
     }
   }
 }
@@ -458,11 +584,11 @@ function skipTarget() {
   appState.spielen.stats.red++;
   targetLayer.setStyle({ fillColor: '#ef4444', fillOpacity: 0.8 });
   targetLayer.feature.properties._gameState = 'red';
-  
-  targetLayer.bindTooltip(targetLayer.feature.properties.OTEIL, { 
-    direction: 'center', 
-    className: 'custom-tooltip error-tooltip', 
-    permanent: true 
+
+  targetLayer.bindTooltip(targetLayer.feature.properties.OTEIL, {
+    direction: 'center',
+    className: 'custom-tooltip error-tooltip',
+    permanent: true
   }).openTooltip();
 
   appState.spielen.currentTarget = null; // Disable interaction during delay
@@ -479,71 +605,42 @@ function endGame() {
   const elapsed = Math.floor(elapsedMs / 1000);
   const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
   const s = String(elapsed % 60).padStart(2, '0');
-  
+
   document.getElementById('stat-time').textContent = `${m}:${s}`;
   document.getElementById('stat-green').textContent = appState.spielen.stats.green;
   document.getElementById('stat-orange').textContent = appState.spielen.stats.orange;
   document.getElementById('stat-red').textContent = appState.spielen.stats.red;
-  
+
   statsModal.classList.remove('hidden');
 }
 
-// Init Fetch
-fetch('./lor_ortsteile.geojson')
-  .then(resp => resp.json())
-  .then(data => {
-    // Populate custom filter choices
-    const oteils = data.features.map(f => f.properties.OTEIL).sort();
-    appState.customTargets = []; // default blank
-    filterCheckboxesContainer.innerHTML = '';
-    
-    oteils.forEach(o => {
-      const lbl = document.createElement('label');
-      lbl.style.display = 'flex';
-      lbl.style.alignItems = 'center';
-      lbl.style.cursor = 'pointer';
-      
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.value = o;
-      cb.style.marginRight = '6px';
-      cb.addEventListener('change', () => {
-        if (cb.checked) {
-          if (!appState.customTargets.includes(o)) appState.customTargets.push(o);
-        } else {
-          appState.customTargets = appState.customTargets.filter(item => item !== o);
-        }
-        updateExportString();
-      });
-      
-      lbl.appendChild(cb);
-      lbl.appendChild(document.createTextNode(o));
-      filterCheckboxesContainer.appendChild(lbl);
-    });
-    updateExportString();
+// Init Fetch - load both datasets
+Promise.all([
+  fetch('./lor_ortsteile.geojson').then(r => r.json()),
+  fetch('./quartier_berlin.geojson').then(r => r.json()),
+  fetch('./bezirksgrenzen.geojson').then(r => r.json())
+]).then(([oData, qData, bezirkData]) => {
+  ortsteilData = oData;
+  quartierData = qData;
 
-    geojsonLayer = L.geoJSON(data, { style: getLernenStyle, onEachFeature: onEachFeature }).addTo(map);
-    map.fitBounds(geojsonLayer.getBounds());
-    
-    // Load bezirksgrenzen with thicker borders
-    fetch('./bezirksgrenzen.geojson')
-      .then(resp => resp.json())
-      .then(bezirkData => {
-        L.geoJSON(bezirkData, {
-          pane: 'bezirkePane',
-          style: {
-            color: '#0f172a',
-            weight: 3,
-            opacity: 0.8,
-            fillOpacity: 0,
-            interactive: false
-          }
-        }).addTo(map);
-      })
-      .catch(err => console.error("Could not load bezirksgrenzen.geojson", err));
-  })
-  .catch(err => {
-    console.error(err);
-    ortsteilNameEl.textContent = "Error loading map data.";
-    ortsteilNameEl.style.color = "#ef4444";
-  });
+  // Build initial layer and UI
+  rebuildCustomFilter();
+  buildActiveLayer();
+  updateRegionSelectLabels();
+
+  // Bezirksgrenzen overlay
+  L.geoJSON(bezirkData, {
+    pane: 'bezirkePane',
+    style: {
+      color: '#0f172a',
+      weight: 3,
+      opacity: 0.8,
+      fillOpacity: 0,
+      interactive: false
+    }
+  }).addTo(map);
+}).catch(err => {
+  console.error(err);
+  ortsteilNameEl.textContent = "Error loading map data.";
+  ortsteilNameEl.style.color = "#ef4444";
+});

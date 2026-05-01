@@ -10,13 +10,15 @@ The application features two primary modes:
 
 ### 1. Learning Mode (*Lernen*)
 - Explore the map freely.
-- Click on any district (*Ortsteil*) to instantly see its name.
+- Toggle between **Ortsteile** and **Quartiere** in the settings menu.
+- Click on any area or marker to instantly see its name.
 
 
 ### 2. Playing Mode (*Spielen*)
 - Test your knowledge with a quiz!
-- The app will prompt you to find a specific district on the map.
-- You have up to 3 attempts per district.
+- Choose between identifying **Ortsteile** (districts) or **Quartiere** (neighborhoods).
+- The app will prompt you to find a specific target on the map.
+- You have up to 3 attempts per target.
 
 - **Customization:** Use the settings menu to filter the game by specific regions or create a custom selection of districts to practice.
 
