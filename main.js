@@ -112,6 +112,7 @@ const progressTextEl = document.getElementById('progress-text');
 const dots = document.querySelectorAll('.dot');
 const statsModal = document.getElementById('stats-modal');
 const btnRestart = document.getElementById('btn-restart');
+const btnCloseStats = document.getElementById('btn-close-stats');
 
 const toggleErrorNames = document.getElementById('toggle-error-names');
 const toggleMapLabels = document.getElementById('toggle-map-labels');
@@ -138,6 +139,11 @@ btnRestart.addEventListener('click', () => {
   appState.spielen.inProgress = false;
   switchMode('spielen');
 });
+if (btnCloseStats) {
+  btnCloseStats.addEventListener('click', () => {
+    statsModal.classList.add('hidden');
+  });
+}
 if (btnRestartGame) {
   btnRestartGame.addEventListener('click', () => {
     appState.spielen.inProgress = false;
@@ -153,6 +159,7 @@ regionSelect.addEventListener('change', () => {
   btnConfigFilter.classList.toggle('hidden', regionSelect.value !== 'custom');
   appState.spielen.inProgress = false;
   switchMode(appState.mode);
+  if (geojsonLayer) map.fitBounds(geojsonLayer.getBounds());
 });
 
 gametypeSelect.addEventListener('change', () => {
@@ -350,12 +357,12 @@ function isLayerInRegion(feature) {
 }
 
 function getInactiveStyle(feature) {
-  return { fillColor: '#94a3b8', weight: 1, opacity: 0.4, color: '#cbd5e1', fillOpacity: 0.2 };
+  return { fillColor: '#94a3b8', weight: 1, opacity: 0.4, color: '#cbd5e1', fillOpacity: 0.1 };
 }
 
 function getLernenStyle(feature) {
   if (!isLayerInRegion(feature)) return getInactiveStyle(feature);
-  return { fillColor: '#3b82f6', weight: 1, opacity: 0.8, color: '#1d4ed8', fillOpacity: 0.35 };
+  return { fillColor: '#3b82f6', weight: 1, opacity: 0.8, color: '#1d4ed8', fillOpacity: 0.15 };
 }
 function getSpielenBaseStyle(feature) {
   return getLernenStyle(feature);
@@ -374,7 +381,7 @@ function onEachFeature(feature, layer) {
 
       if (appState.mode === 'lernen') {
         if (highlightedFeature !== tgt) {
-          tgt.setStyle({ weight: 3, color: '#1e3a8a', fillOpacity: 0.7 });
+          tgt.setStyle({ weight: 3, color: '#1e3a8a', fillOpacity: 0.4 });
           if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) tgt.bringToFront();
           bezirkTitleEl.textContent = tgt.feature.properties.OTEIL;
           ortsteilNameEl.textContent = `Bezirk: ${tgt.feature.properties.BEZIRK}`;
@@ -413,7 +420,7 @@ function onEachFeature(feature, layer) {
       if (appState.mode === 'lernen') {
         if (highlightedFeature && highlightedFeature !== e.target) geojsonLayer.resetStyle(highlightedFeature);
         highlightedFeature = e.target;
-        e.target.setStyle({ weight: 3, color: '#1e3a8a', fillOpacity: 0.7 });
+        e.target.setStyle({ weight: 3, color: '#1e3a8a', fillOpacity: 0.4 });
         if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) e.target.bringToFront();
       } else if (appState.mode === 'spielen') {
         handleSpielenClick(e.target);
@@ -440,7 +447,6 @@ function resetLernenMode() {
   bezirkTitleEl.style.background = `linear-gradient(135deg, #FFFFFF 0%, #A5B4FC 100%)`;
   bezirkTitleEl.style.webkitBackgroundClip = 'text';
   bezirkTitleEl.style.webkitTextFillColor = 'transparent';
-  map.fitBounds(geojsonLayer.getBounds());
 }
 
 function resumeSpielenMode() {
@@ -462,11 +468,11 @@ function resumeSpielenMode() {
       layer.getElement()?.classList.remove('inactive-region');
       const state = layer.feature.properties._gameState;
       if (state === 'green') {
-        layer.setStyle({ fillColor: '#10b981', fillOpacity: 0.8 });
+        layer.setStyle({ fillColor: '#10b981', fillOpacity: 0.4 });
       } else if (state === 'orange') {
-        layer.setStyle({ fillColor: '#f59e0b', fillOpacity: 0.8 });
+        layer.setStyle({ fillColor: '#f59e0b', fillOpacity: 0.4 });
       } else if (state === 'red') {
-        layer.setStyle({ fillColor: '#ef4444', fillOpacity: 0.8 });
+        layer.setStyle({ fillColor: '#ef4444', fillOpacity: 0.4 });
       } else {
         layer.setStyle(getSpielenBaseStyle(layer.feature));
       }
@@ -485,8 +491,6 @@ function resumeSpielenMode() {
   for (let i = 0; i < appState.spielen.attempts && i < 3; i++) {
     dots[3 - (i + 1)].classList.add('lost');
   }
-
-  map.fitBounds(geojsonLayer.getBounds());
 }
 
 function startSpielenMode() {
@@ -512,7 +516,6 @@ function startSpielenMode() {
   appState.spielen.remainingTargets = [...appState.spielen.allTargets].sort(() => Math.random() - 0.5);
   appState.spielen.stats = { green: 0, orange: 0, red: 0 };
 
-  map.fitBounds(geojsonLayer.getBounds());
   pickNextTarget();
 }
 
@@ -542,17 +545,17 @@ function handleSpielenClick(clickedLayer) {
   if (clickedLayer === targetLayer) {
     dots.forEach(d => d.classList.remove('lost'));
     if (appState.spielen.attempts === 1) {
-      clickedLayer.setStyle({ fillColor: '#10b981', fillOpacity: 0.8 });
+      clickedLayer.setStyle({ fillColor: '#10b981', fillOpacity: 0.4 });
       clickedLayer.feature.properties._gameState = 'green';
       appState.spielen.stats.green++;
     } else {
-      clickedLayer.setStyle({ fillColor: '#f59e0b', fillOpacity: 0.8 });
+      clickedLayer.setStyle({ fillColor: '#f59e0b', fillOpacity: 0.4 });
       clickedLayer.feature.properties._gameState = 'orange';
       appState.spielen.stats.orange++;
     }
     setTimeout(pickNextTarget, 400);
   } else {
-    clickedLayer.setStyle({ fillColor: '#ef4444', fillOpacity: 0.8 });
+    clickedLayer.setStyle({ fillColor: '#ef4444', fillOpacity: 0.4 });
 
     const showNames = toggleErrorNames && toggleErrorNames.checked;
     const errorDelay = showNames ? 1200 : 400; // give time to read if names are shown
@@ -570,7 +573,7 @@ function handleSpielenClick(clickedLayer) {
 
     if (appState.spielen.attempts >= 3) {
       appState.spielen.stats.red++;
-      targetLayer.setStyle({ fillColor: '#ef4444', fillOpacity: 0.8 });
+      targetLayer.setStyle({ fillColor: '#ef4444', fillOpacity: 0.4 });
       targetLayer.feature.properties._gameState = 'red';
 
       // Always show tooltip on failure
@@ -595,7 +598,7 @@ function skipTarget() {
   if (!targetLayer || !appState.spielen.inProgress) return;
 
   appState.spielen.stats.red++;
-  targetLayer.setStyle({ fillColor: '#ef4444', fillOpacity: 0.8 });
+  targetLayer.setStyle({ fillColor: '#ef4444', fillOpacity: 0.4 });
   targetLayer.feature.properties._gameState = 'red';
 
   targetLayer.bindTooltip(targetLayer.feature.properties.OTEIL, {
