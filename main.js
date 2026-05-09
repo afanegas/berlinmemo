@@ -449,7 +449,7 @@ function onEachFeature(feature, layer) {
 function resetLernenMode() {
   if (!geojsonLayer) return;
   geojsonLayer.eachLayer(layer => {
-    layer.setStyle(getLernenStyle(layer.feature));
+    geojsonLayer.resetStyle(layer);
     if (!isLayerInRegion(layer.feature)) {
       layer.unbindTooltip();
       layer.getElement()?.classList.add('inactive-region');
@@ -491,7 +491,7 @@ function resumeSpielenMode() {
       } else if (state === 'red') {
         layer.setStyle({ fillColor: '#ef4444', fillOpacity: 0.4 });
       } else {
-        layer.setStyle(getSpielenBaseStyle(layer.feature));
+        geojsonLayer.resetStyle(layer);
       }
     }
   });
@@ -525,7 +525,7 @@ function startSpielenMode() {
       layer.getElement()?.classList.add('inactive-region');
     } else {
       appState.spielen.allTargets.push(layer);
-      layer.setStyle(getSpielenBaseStyle(layer.feature));
+      geojsonLayer.resetStyle(layer);
       layer.getElement()?.classList.remove('inactive-region');
     }
   });
@@ -582,7 +582,7 @@ function handleSpielenClick(clickedLayer) {
     }
 
     setTimeout(() => {
-      if (!clickedLayer.feature.properties._gameState) clickedLayer.setStyle(getSpielenBaseStyle(clickedLayer.feature));
+      if (!clickedLayer.feature.properties._gameState) geojsonLayer.resetStyle(clickedLayer);
       if (showNames) clickedLayer.unbindTooltip();
     }, errorDelay);
 
