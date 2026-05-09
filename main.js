@@ -262,24 +262,28 @@ function switchMode(mode) {
 let ortsteilData = null;
 let quartierData = null;
 let plrData = null;
+let stationsData = null;
 let geojsonLayer;
 let highlightedFeature = null;
 
 function getActiveData() {
   if (appState.gameType === 'ortsteile') return ortsteilData;
   if (appState.gameType === 'quartier') return quartierData;
+  if (appState.gameType === 'stations') return stationsData;
   return plrData;
 }
 
 function getTypeName() {
   if (appState.gameType === 'ortsteile') return 'Ortsteile';
   if (appState.gameType === 'quartier') return 'Quartiere';
+  if (appState.gameType === 'stations') return 'Bahnhöfe';
   return 'PLR';
 }
 
 function getDefaultPrompt() {
   if (appState.gameType === 'ortsteile') return 'Wähle einen Ortsteil';
   if (appState.gameType === 'quartier') return 'Wähle ein Quartier';
+  if (appState.gameType === 'stations') return 'Wähle einen Bahnhof';
   return 'Wähle einen Planungsraum';
 }
 
@@ -338,7 +342,7 @@ function buildActiveLayer() {
   const data = getActiveData();
   if (!data) return;
   const opts = { style: getLernenStyle, onEachFeature: onEachFeature };
-  if (appState.gameType === 'quartier') {
+  if (appState.gameType === 'quartier' || appState.gameType === 'stations') {
     opts.pointToLayer = (feature, latlng) => {
       return L.circleMarker(latlng, { radius: 12 });
     };
@@ -362,6 +366,19 @@ function getInactiveStyle(feature) {
 
 function getLernenStyle(feature) {
   if (!isLayerInRegion(feature)) return getInactiveStyle(feature);
+  
+  if (appState.gameType === 'stations') {
+    const sType = feature.properties.station_type;
+    if (sType === 'S-Bahn') {
+      return { fillColor: '#166534', weight: 2, opacity: 0.9, color: '#14532d', fillOpacity: 0.7 }; // Dark Green
+    } else if (sType === 'U-Bahn') {
+      return { fillColor: '#3b82f6', weight: 2, opacity: 0.9, color: '#1d4ed8', fillOpacity: 0.7 }; // Lighter Blue
+    } else if (sType === 'S+U-Bahn') {
+      return { fillColor: 'url(#su-gradient)', weight: 2, opacity: 0.9, color: '#0f172a', fillOpacity: 0.9 }; // Gradient fill, slate border
+    }
+    return { fillColor: '#64748b', weight: 2, opacity: 0.9, color: '#475569', fillOpacity: 0.7 }; // Default Slate
+  }
+  
   return { fillColor: '#3b82f6', weight: 1, opacity: 0.8, color: '#1d4ed8', fillOpacity: 0.15 };
 }
 function getSpielenBaseStyle(feature) {
@@ -630,16 +647,54 @@ function endGame() {
   statsModal.classList.remove('hidden');
 }
 
-// Init Fetch - load both datasets
+// Init Fetch - load all datasets
 Promise.all([
   fetch('./lor_ortsteile.geojson').then(r => r.json()),
   fetch('./quartier_berlin.geojson').then(r => r.json()),
   fetch('./lor_2021_a_lor_plr_2021_WGS84.geojson').then(r => r.json()),
-  fetch('./bezirksgrenzen.geojson').then(r => r.json())
-]).then(([oData, qData, pData, bezirkData]) => {
+  fetch('./bezirksgrenzen.geojson').then(r => r.json()),
+  fetch('./berlin_stations.geojson').then(r => r.json())
+]).then(([oData, qData, pData, bezirkData, sData]) => {
   ortsteilData = oData;
   quartierData = qData;
   
+  // Spatial join helpers
+  function pointInPolygon(point, polygon) {
+    let isInside = false;
+    for (let i = 0; i < polygon.length; i++) {
+      let ring = polygon[i];
+      let insideRing = false;
+      for (let j = 0, k = ring.length - 1; j < ring.length; k = j++) {
+        let xi = ring[j][0], yi = ring[j][1];
+        let xj = ring[k][0], yj = ring[k][1];
+        let intersect = ((yi > point[1]) != (yj > point[1])) && (point[0] < (xj - xi) * (point[1] - yi) / (yj - yi) + xi);
+        if (intersect) insideRing = !insideRing;
+      }
+      if (i === 0) isInside = insideRing;
+      else if (insideRing) { isInside = false; break; }
+    }
+    return isInside;
+  }
+
+  function getBezirkForPoint(lng, lat, bezirkData) {
+    for (let feature of bezirkData.features) {
+      let polygons = feature.geometry.type === 'MultiPolygon' ? feature.geometry.coordinates : [feature.geometry.coordinates];
+      for (let poly of polygons) {
+        if (pointInPolygon([lng, lat], poly)) return feature.properties.Gemeinde_name;
+      }
+    }
+    return null;
+  }
+
+  // Normalize stations data
+  sData.features.forEach(f => {
+    f.properties.OTEIL = f.properties.name;
+    let coords = f.geometry.coordinates;
+    let bezirk = getBezirkForPoint(coords[0], coords[1], bezirkData);
+    f.properties.BEZIRK = bezirk || "Mitte"; // Fallback
+  });
+  stationsData = sData;
+
   // Normalize PLR data to match OTEIL/BEZIRK schema
   pData.features.forEach(f => {
     f.properties.OTEIL = f.properties.plr_name;

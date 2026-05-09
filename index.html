@@ -19,6 +19,16 @@
   <body>
     <!-- App Container -->
     <main id="app">
+      <!-- SVG Defs for gradients -->
+      <svg style="width:0;height:0;position:absolute;" aria-hidden="true" focusable="false">
+        <defs>
+          <linearGradient id="su-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="50%" stop-color="#166534" />
+            <stop offset="50%" stop-color="#3b82f6" />
+          </linearGradient>
+        </defs>
+      </svg>
+      
       <!-- Info Overlay -->
       <header id="info-panel" class="glass-panel">
         <!-- Menu & Mode Switcher -->
@@ -46,6 +56,7 @@
                   <option value="ortsteile">Ortsteile</option>
                   <option value="quartier">Quartiere</option>
                   <option value="plr">PLR</option>
+                  <option value="stations">Bahnhöfe</option>
                 </select>
               </div>
 
